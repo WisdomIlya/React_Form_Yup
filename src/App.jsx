@@ -1,147 +1,81 @@
-import { useState, useRef, useEffect } from 'react';
-import styles from './App.module.css';
-import { PASSWORD_STRENGTH, USER_FORM } from './constants';
-import { sendFormData } from './api';
-import { validateEmailOnBlur,
-	validatePasswordOnBlur,
-	validatePasswordRepeatOnBlur } from './utils/blur/blur';
-import { validatePassword,
-	validateRepeatPassword,
-	calculatePasswordStrength } from './utils/validate/validate.js';
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
+import styles from "./App.module.css";
+import { validationSchema } from "./shemas";
+import { PasswordStrengthIndicator } from "./components";
+import { sendFormData } from "./api";
 
 export const App = () => {
-	const [formData, setFormData] = useState( USER_FORM );
-	const [errorEmail, setEmailError] = useState(null);
-	const [errorPassword, setErrorPassword] = useState(null);
-	const [errorRepeatPassword, setErrorRepeatPassword] = useState(null);
-	const [passwordStrength, setPasswordStrength] = useState( PASSWORD_STRENGTH );
-	const [lastChangedField, setLastChangedField] = useState ('');
+	const {
+		register,
+		handleSubmit,
+		watch,
+		formState: { errors, isValid },
+		setFocus
+	} = useForm ({
+		resolver: yupResolver(validationSchema),
+		mode: 'onChange'
+	});
 
-	const submitButtonRef = useRef(null);
+	const passwordValue = watch('password');
+	const allFieldsFilled = watch(['email', 'password', 'repeatPassword']).every(Boolean);
 
-	const onSubmit = (event) => {
-		event.preventDefault();
-		if (isFormValid) sendFormData(formData);
-	};
-
-	const isFormValid = () => {
-    if (!formData.email || !formData.password || !formData.repeatPassword) return false;
-    if (errorEmail || errorPassword || errorRepeatPassword) return false;
-    if (formData.password !== formData.repeatPassword) return false;
-    return true;
+	const onSubmit = (data) => {
+		sendFormData(data);
 	}
 
-  	useEffect(() => {
-  	const allFieldsFilled = formData.email && formData.password && formData.repeatPassword;
-  	const noErrors = !errorEmail && !errorPassword && !errorRepeatPassword;
-  	const passwordsMatch = formData.password === formData.repeatPassword;
+	useEffect(() => {
+		if (isValid && allFieldsFilled) {
+			const timer = setTimeout(() => {
+				setFocus('submit-button');
+			}, 100);
 
-  	if (allFieldsFilled && noErrors && passwordsMatch &&
-      lastChangedField === 'repeatPassword' &&
-      submitButtonRef.current) {
-    const timer = setTimeout(() => {
-      submitButtonRef.current.focus();
-    }, 100);
-
-    return () => clearTimeout(timer);
-  	}
-	}, [formData, errorEmail, errorPassword, errorRepeatPassword, lastChangedField]);
-
-	const onEmailChange = ({ target }) => {
-		const newValue = target.value;
-		setFormData({...formData, email:newValue});
-		setLastChangedField('email');
-
-		let newEmailError = null;
-
-		setEmailError(newEmailError);
-	}
-
-	const onPasswordChange = ({ target }) => {
-		const newValue = target.value;
-		setFormData(prev => ({...prev, password:newValue}));
-		setErrorPassword(validatePassword( newValue ));
-
-		setLastChangedField('password');
-
-		let newPasswordError = null;
-
-		setErrorPassword(newPasswordError);
-
-		const strength = calculatePasswordStrength( newValue );
-    	setPasswordStrength({
-  			width: strength.width,
-  			class: styles[strength.classType] || '',
-			});
-	}
-
-	const onRepeatPasswordChange = ({ target }) => {
-		const newValue = target.value;
-		setFormData(prev => ({...prev, repeatPassword: newValue}));
-		setErrorRepeatPassword(validateRepeatPassword(formData.password, newValue));
-		setLastChangedField('repeatPassword');
-	}
-
-	const onEmailBlur = ({ target }) => {
-  		setEmailError(validateEmailOnBlur(target.value));
-	};
-
-	const onPasswordBlur = ({ target }) => {
-  		setErrorPassword(validatePasswordOnBlur(target.value));
-	};
-
-	const onPasswordRepeatBlur = ({ target }) => {
-  		setErrorRepeatPassword(validatePasswordRepeatOnBlur(target.value, formData.password));
-	};
+			return () => clearTimeout(timer);
+		}
+	}, [isValid, allFieldsFilled, setFocus]);
 
 	return (
 		<div className={styles.formContainer}>
-			<form onSubmit={onSubmit} className={styles.formGroup}>
-				{errorEmail && <div className={styles.formError}>{errorEmail}</div>}
-				<input className={styles.formInput}
-				label="Email"
-				type="email"
-				name="email"
-				placeholder="Введите почту"
-				value={formData.email}
-				onChange={onEmailChange}
-				onBlur={onEmailBlur}
-				/>
-				{errorPassword && <div className={styles.formError}>{errorPassword}</div>}
-				<input className={styles.formInput}
-				label="Password"
-				type="password"
-				name="password"
-				placeholder="Введите пароль"
-				value={formData.password}
-				onChange={onPasswordChange}
-				onBlur={onPasswordBlur}
-				/>
-				{errorRepeatPassword && <div className={styles.formError}>{errorRepeatPassword}</div>}
+      		<form onSubmit={handleSubmit(onSubmit)} className={styles.formGroup}>
 
-				{formData.password  && (
-          		<div className={styles.passwordStrength}>
-              		<div
-                		className={`${styles.strengthFill} ${passwordStrength.class}`}
-                		style={{ width: `${passwordStrength.width}%` }}
-              		/>
-          		</div>
-        		)}
+ 			{errors.email && <div className={styles.formError}>{errors.email.message}</div>}
+        	<input
+          	  className={styles.formInput}
+          	  type="email"
+          	  placeholder="Введите почту"
+          	  {...register('email')}
+        	/>
 
-				<input className={styles.formInput}
-				label="Repeat password"
-				type="password"
-				name="repeatPassword"
-				placeholder="Подтвердите пароль"
-				value={formData.repeatPassword}
-				onChange={onRepeatPasswordChange}
-				onBlur={onPasswordRepeatBlur}
-				/>
-				<button ref={submitButtonRef}
-				className={styles.submitButton}
-				type="submit"
-				disabled={!isFormValid()}>Зарегистрироваться</button>
+			{errors.password && <div className={styles.formError}>{errors.password.message}</div>}
+			<input
+			  className={styles.formInput}
+			  type="password"
+			  placeholder="Введите пароль"
+			  {...register('password')}
+			/>
+
+			{passwordValue && <PasswordStrengthIndicator password={passwordValue} />}
+
+			{errors.repeatPassword && (
+          	<div className={styles.formError}>{errors.repeatPassword.message}</div>
+			)}
+			<input
+			  className={styles.formInput}
+			  type="password"
+			  placeholder="Подтвердите пароль"
+			  {...register('repeatPassword')}
+			/>
+
+			<button
+          	  className={styles.submitButton}
+          	  type="submit"
+          	  disabled={!isValid}
+          	  {...register('submit-button')}
+        	>
+				Зарегистрироваться
+			</button>
 			</form>
 		</div>
-	);
-};
+	)
+}
